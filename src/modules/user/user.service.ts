@@ -1,10 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { UserDto } from './dto/user.dto.js';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { UpdateUserDto, UserDto } from './dto/user.dto.js';
 import { User } from '../../core/schemas/user.schemas.js';
-import { Model } from 'mongoose';
+import { isValidObjectId, Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import bcrypt from 'bcrypt';
-import { retry } from 'rxjs';
 
 const SALT_ROUNDS = 10;
 
@@ -26,7 +25,7 @@ export class UserService {
             ...userBody,
             password: hashedPassword,
         });
-        const { password, ...userWithoutPassword } = newUser.toObject();
+        const { password: _password, ...userWithoutPassword } = newUser.toObject();
         return {
             message: 'User created successfully',
             data: userWithoutPassword,
@@ -40,18 +39,76 @@ export class UserService {
         };
     }
 
-    async getUserById(id: string) {
+    async fetchUserById(id: string) {
+        this.assertValidId(id);
         const user = await this.userModel.findById(id);
         if (!user) {
-            return {
-                message: "sorry , User not found!",
+            throw new NotFoundException('User not found');
+        }
+
+        return {
+            message: 'user found',
+            data: user,
+        };
+    }
+
+    async updateUser(id: string, userBody: UpdateUserDto) {
+        this.assertValidId(id);
+
+        const updates: Partial<User> = {};
+        if (userBody.name !== undefined) {
+            updates.name = userBody.name;
+        }
+        if (userBody.email !== undefined) {
+            updates.email = userBody.email;
+        }
+        if (userBody.password !== undefined) {
+            updates.password = await bcrypt.hash(userBody.password, SALT_ROUNDS);
+        }
+        if (Object.keys(updates).length === 0) {
+            throw new BadRequestException('No fields to update');
+        }
+
+        if (userBody.email) {
+            const isEmailTaken = await this.userModel.findOne({
+                email: userBody.email,
+                _id: { $ne: id },
+            });
+            if (isEmailTaken) {
+                throw new ConflictException('Email is already in use');
             }
         }
-        const { password, ...userWithoutPassword } = user.toObject();
-        return {
-            message: 'User fetched successfully',
-            data: userWithoutPassword,
-        };
 
+        const updatedUser = await this.userModel.findByIdAndUpdate(id, updates, {
+            new: true,
+            runValidators: true,
+        });
+        if (!updatedUser) {
+            throw new NotFoundException('User not found');
+        }
+
+        return {
+            message: 'User updated successfully',
+            data: updatedUser,
+        };
+    }
+
+    async deleteUser(id: string) {
+        this.assertValidId(id);
+        const deletedUser = await this.userModel.findByIdAndDelete(id);
+        if (!deletedUser) {
+            throw new NotFoundException('User not found');
+        }
+
+        return {
+            message: 'User deleted successfully',
+            data: deletedUser,
+        };
+    }
+
+    private assertValidId(id: string) {
+        if (!isValidObjectId(id)) {
+            throw new BadRequestException('Invalid user id');
+        }
     }
 }

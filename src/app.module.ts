@@ -5,6 +5,8 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { resolveObserveOptions } from './observe.config.js';
 import { UserModule } from './modules/user/user.module.js';
+import { EventModule } from './modules/event/event.module.js';
+import { BookingModule } from './modules/booking/booking.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 const observeOptions = resolveObserveOptions();
@@ -14,6 +16,8 @@ const observeOptions = resolveObserveOptions();
     MongooseModule.forRoot('mongodb://localhost/event-booking-db'),
     ...(observeOptions ? [ObserveModule.forRoot(observeOptions)] : []),
     UserModule,
+    EventModule,
+    BookingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,7 +1,6 @@
 
-import { Type } from '@nestjs/common';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, Schema as MongooseSchema, Types } from 'mongoose';
 
 export type BookingDocument = HydratedDocument<Booking>;
 
@@ -14,13 +13,13 @@ export type BookingDocument = HydratedDocument<Booking>;
 export class Booking {
 
     @Prop({
-        type: Types.ObjectId,
+        type: MongooseSchema.Types.ObjectId,
         ref: 'User',
         required: true,
     })
     user: Types.ObjectId;
     @Prop({
-        type: Types.ObjectId,
+        type: MongooseSchema.Types.ObjectId,
         ref: 'Event',
         required: true,
     })

@@ -354,21 +354,6 @@ verification is not a substitute, and this README won't pretend otherwise.
 
 ---
 
-## Roadmap
-
-- [ ] Automated tests — unit tests for the services, e2e for the guard matrix
-- [ ] Refresh tokens and logout (a leaked token currently can't be revoked)
-- [ ] Admin-only `PATCH /user/:id/role` instead of promoting in the shell
-- [ ] Atomic seat counter (`$inc` under a filter) to close the oversell race
-- [ ] Cascade deletes so removing an event doesn't orphan its bookings
-- [ ] Restrict the `confirmed` status transition to admins / a payment step
-- [ ] CORS and `helmet` ahead of a browser frontend
-- [ ] Mongo URI from the environment rather than hard-coded
-- [ ] Swagger / OpenAPI via `@nestjs/swagger`
-- [ ] Dockerfile + docker-compose for one-command startup
-
----
-
 ## Author
 
 **Islam Ashraf** — [github.com/islamashraf2003](https://github.com/islamashraf2003)

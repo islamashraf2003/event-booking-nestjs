@@ -13,6 +13,7 @@ const observeOptions = resolveObserveOptions();
   imports: [
     MongooseModule.forRoot('mongodb://localhost/event-booking-db'),
     ...(observeOptions ? [ObserveModule.forRoot(observeOptions)] : []),
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],

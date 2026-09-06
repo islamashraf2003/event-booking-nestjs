@@ -4,16 +4,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
 export type BookingDocument = HydratedDocument<Booking>;
-/*
-bookings
-├── _id   done 
-├── user  done 
-├── event done 
-├── tickets
-├── status
-├── createdAt
-└── updatedAt
-*/
+
 @Schema(
     {
         timestamps: true,

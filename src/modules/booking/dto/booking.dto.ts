@@ -5,10 +5,6 @@ export const BOOKING_STATUSES = ['pending', 'confirmed', 'cancelled'];
 export class BookingDto {
     @IsNotEmpty()
     @IsMongoId()
-    user: string;
-
-    @IsNotEmpty()
-    @IsMongoId()
     event: string;
 
     @IsNotEmpty()

@@ -1,17 +1,25 @@
 import {
     BadRequestException,
     ConflictException,
+    ForbiddenException,
     Injectable,
     NotFoundException,
+    UnauthorizedException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { isValidObjectId, Model, Types } from 'mongoose';
 import { Booking } from '../../core/schemas/booking.schema.js';
 import { Event } from '../../core/schemas/event.schema.js';
 import { User } from '../../core/schemas/user.schemas.js';
+import { AuthUser } from '../../core/guards/auth.guard.js';
 import { BookingDto, UpdateBookingDto } from './dto/booking.dto.js';
 
 const ACTIVE_STATUSES = ['pending', 'confirmed'];
+
+const POPULATE = [
+    { path: 'user', select: 'name email' },
+    { path: 'event', select: 'title startsAt location' },
+];
 
 @Injectable()
 export class BookingService {
@@ -21,10 +29,11 @@ export class BookingService {
         @InjectModel(User.name) private userModel: Model<User>,
     ) { }
 
-    async addNewBooking(bookingBody: BookingDto) {
-        const isUserFound = await this.userModel.exists({ _id: bookingBody.user });
+    async addNewBooking(bookingBody: BookingDto, currentUser: AuthUser) {
+        // a token outlives the account it was issued for, so re-check
+        const isUserFound = await this.userModel.exists({ _id: currentUser.sub });
         if (!isUserFound) {
-            throw new NotFoundException('User not found');
+            throw new UnauthorizedException('User no longer exists');
         }
 
         const event = await this.eventModel.findById(bookingBody.event);
@@ -38,7 +47,7 @@ export class BookingService {
         }
 
         const newBooking = await this.bookingModel.create({
-            user: bookingBody.user,
+            user: currentUser.sub,        // from the token, not the request body
             event: bookingBody.event,
             tickets: bookingBody.tickets,
             status,
@@ -50,11 +59,11 @@ export class BookingService {
         };
     }
 
-    async fetchAllBookings() {
+    async fetchAllBookings(currentUser: AuthUser) {
+        const filter = this.isAdmin(currentUser) ? {} : { user: currentUser.sub };
         const allBookings = await this.bookingModel
-            .find()
-            .populate('user', 'name email')
-            .populate('event', 'title startsAt location')
+            .find(filter)
+            .populate(POPULATE)
             .sort({ createdAt: -1 });
 
         return {
@@ -63,15 +72,10 @@ export class BookingService {
         };
     }
 
-    async fetchBookingById(id: string) {
-        this.assertValidId(id);
-        const booking = await this.bookingModel
-            .findById(id)
-            .populate('user', 'name email')
-            .populate('event', 'title startsAt location');
-        if (!booking) {
-            throw new NotFoundException('Booking not found');
-        }
+    async fetchBookingById(id: string, currentUser: AuthUser) {
+        const booking = await this.findBookingOrFail(id);
+        this.assertOwnerOrAdmin(booking, currentUser);
+        await booking.populate(POPULATE);
 
         return {
             message: 'booking found',
@@ -79,9 +83,11 @@ export class BookingService {
         };
     }
 
-    async updateBooking(id: string, bookingBody: UpdateBookingDto) {
-        this.assertValidId(id);
-
+    async updateBooking(
+        id: string,
+        bookingBody: UpdateBookingDto,
+        currentUser: AuthUser,
+    ) {
         const updates: Partial<Booking> = {};
         if (bookingBody.tickets !== undefined) {
             updates.tickets = bookingBody.tickets;
@@ -93,10 +99,8 @@ export class BookingService {
             throw new BadRequestException('No fields to update');
         }
 
-        const booking = await this.bookingModel.findById(id);
-        if (!booking) {
-            throw new NotFoundException('Booking not found');
-        }
+        const booking = await this.findBookingOrFail(id);
+        this.assertOwnerOrAdmin(booking, currentUser);
 
         const tickets = updates.tickets ?? booking.tickets;
         const status = updates.status ?? booking.status;
@@ -110,8 +114,7 @@ export class BookingService {
 
         const updatedBooking = await this.bookingModel
             .findByIdAndUpdate(id, updates, { new: true, runValidators: true })
-            .populate('user', 'name email')
-            .populate('event', 'title startsAt location');
+            .populate(POPULATE);
 
         return {
             message: 'Booking updated successfully',
@@ -119,17 +122,38 @@ export class BookingService {
         };
     }
 
-    async deleteBooking(id: string) {
-        this.assertValidId(id);
-        const deletedBooking = await this.bookingModel.findByIdAndDelete(id);
-        if (!deletedBooking) {
-            throw new NotFoundException('Booking not found');
-        }
+    async deleteBooking(id: string, currentUser: AuthUser) {
+        const booking = await this.findBookingOrFail(id);
+        this.assertOwnerOrAdmin(booking, currentUser);
+        await this.bookingModel.findByIdAndDelete(id);
 
         return {
             message: 'Booking deleted successfully',
-            data: deletedBooking,
+            data: booking,
         };
+    }
+
+    private async findBookingOrFail(id: string) {
+        this.assertValidId(id);
+        const booking = await this.bookingModel.findById(id);
+        if (!booking) {
+            throw new NotFoundException('Booking not found');
+        }
+
+        return booking;
+    }
+
+    private isAdmin(currentUser: AuthUser) {
+        return currentUser.role === 'admin';
+    }
+
+    private assertOwnerOrAdmin(booking: Booking, currentUser: AuthUser) {
+        if (this.isAdmin(currentUser)) {
+            return;
+        }
+        if (booking.user.toString() !== currentUser.sub) {
+            throw new ForbiddenException('This booking belongs to another user');
+        }
     }
 
     private async assertSeatsAvailable(

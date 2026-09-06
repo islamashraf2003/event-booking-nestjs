@@ -1,6 +1,20 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    Param,
+    Patch,
+    Post,
+    UseGuards,
+} from '@nestjs/common';
 import { UserService } from './user.service.js';
 import { UpdateUserDto, UserDto } from './dto/user.dto.js';
+import { AuthGuard } from '../../core/guards/auth.guard.js';
+import type { AuthUser } from '../../core/guards/auth.guard.js';
+import { RolesGuard } from '../../core/guards/roles.guard.js';
+import { Roles } from '../../core/decorators/roles.decorator.js';
+import { CurrentUser } from '../../core/decorators/current-user.decorator.js';
 
 @Controller('user')
 export class UserController {
@@ -12,23 +26,32 @@ export class UserController {
     }
 
     @Get('/')
+    @UseGuards(AuthGuard, RolesGuard)
+    @Roles('admin')
     getAllUsers() {
         return this.userService.featchAllUsers();
     }
 
     @Get('/:id')
-    getUserById(@Param('id') id: string) {
-        return this.userService.fetchUserById(id);
+    @UseGuards(AuthGuard)
+    getUserById(@Param('id') id: string, @CurrentUser() currentUser: AuthUser) {
+        return this.userService.fetchUserById(id, currentUser);
     }
 
     @Patch('/:id')
-    updateUser(@Param('id') id: string, @Body() userBody: UpdateUserDto) {
-        return this.userService.updateUser(id, userBody);
+    @UseGuards(AuthGuard)
+    updateUser(
+        @Param('id') id: string,
+        @Body() userBody: UpdateUserDto,
+        @CurrentUser() currentUser: AuthUser,
+    ) {
+        return this.userService.updateUser(id, userBody, currentUser);
     }
 
     @Delete('/:id')
-    deleteUser(@Param('id') id: string) {
-        return this.userService.deleteUser(id);
+    @UseGuards(AuthGuard)
+    deleteUser(@Param('id') id: string, @CurrentUser() currentUser: AuthUser) {
+        return this.userService.deleteUser(id, currentUser);
     }
 
 }

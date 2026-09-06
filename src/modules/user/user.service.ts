@@ -1,8 +1,15 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ConflictException,
+    ForbiddenException,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 import { UpdateUserDto, UserDto } from './dto/user.dto.js';
 import { User } from '../../core/schemas/user.schemas.js';
 import { isValidObjectId, Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
+import { AuthUser } from '../../core/guards/auth.guard.js';
 import bcrypt from 'bcrypt';
 
 const SALT_ROUNDS = 10;
@@ -39,8 +46,8 @@ export class UserService {
         };
     }
 
-    async fetchUserById(id: string) {
-        this.assertValidId(id);
+    async fetchUserById(id: string, currentUser: AuthUser) {
+        this.assertSelfOrAdmin(id, currentUser);
         const user = await this.userModel.findById(id);
         if (!user) {
             throw new NotFoundException('User not found');
@@ -52,8 +59,12 @@ export class UserService {
         };
     }
 
-    async updateUser(id: string, userBody: UpdateUserDto) {
-        this.assertValidId(id);
+    async updateUser(
+        id: string,
+        userBody: UpdateUserDto,
+        currentUser: AuthUser,
+    ) {
+        this.assertSelfOrAdmin(id, currentUser);
 
         const updates: Partial<User> = {};
         if (userBody.name !== undefined) {
@@ -93,8 +104,8 @@ export class UserService {
         };
     }
 
-    async deleteUser(id: string) {
-        this.assertValidId(id);
+    async deleteUser(id: string, currentUser: AuthUser) {
+        this.assertSelfOrAdmin(id, currentUser);
         const deletedUser = await this.userModel.findByIdAndDelete(id);
         if (!deletedUser) {
             throw new NotFoundException('User not found');
@@ -104,6 +115,13 @@ export class UserService {
             message: 'User deleted successfully',
             data: deletedUser,
         };
+    }
+
+    private assertSelfOrAdmin(id: string, currentUser: AuthUser) {
+        this.assertValidId(id);
+        if (currentUser.role !== 'admin' && id !== currentUser.sub) {
+            throw new ForbiddenException('You can only access your own account');
+        }
     }
 
     private assertValidId(id: string) {
